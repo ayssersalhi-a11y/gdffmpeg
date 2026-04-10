@@ -64,22 +64,20 @@ echo "✓ كود OpenSSL جاهز في: ${SOURCE_DIR}"
 
 # ─── إعداد متغيرات الـ Toolchain ─────────────────────────────────────────────
 TOOLCHAIN="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64"
-SYSROOT="${TOOLCHAIN}/sysroot"
 
-export CC="${TOOLCHAIN}/bin/aarch64-linux-android${API_LEVEL}-clang"
-export CXX="${TOOLCHAIN}/bin/aarch64-linux-android${API_LEVEL}-clang++"
-export AR="${TOOLCHAIN}/bin/llvm-ar"
-export LD="${TOOLCHAIN}/bin/ld"
-export RANLIB="${TOOLCHAIN}/bin/llvm-ranlib"
-export STRIP="${TOOLCHAIN}/bin/llvm-strip"
-export NM="${TOOLCHAIN}/bin/llvm-nm"
+# هذا هو السطر الجوهري: إضافة مجلد bin إلى PATH
+export PATH="${TOOLCHAIN}/bin:${PATH}"
+export ANDROID_NDK_ROOT="${NDK_PATH}"
 
-# ─── التحقق من Clang ──────────────────────────────────────────────────────────
-if [ ! -f "${CC}" ]; then
-    echo "✗ لم يُعثر على Clang: ${CC}"
-    echo "  تأكد من صحة NDK_PATH وAPI_LEVEL"
-    exit 1
-fi
+# تعريف الأدوات بأسماء Clang المباشرة
+export CC="aarch64-linux-android${API_LEVEL}-clang"
+export CXX="aarch64-linux-android${API_LEVEL}-clang++"
+export AR="llvm-ar"
+export AS="llvm-as"
+export LD="ld"
+export RANLIB="llvm-ranlib"
+export STRIP="llvm-strip"
+export NM="llvm-nm"
 
 # ─── بناء OpenSSL ─────────────────────────────────────────────────────────────
 echo ""
@@ -91,25 +89,32 @@ cd "${SOURCE_DIR}"
 # تنظيف أي بناء سابق
 make clean 2>/dev/null || true
 
+# تعديل أمر Configure: أزلنا المسارات الطويلة من المتغيرات لأنها الآن في الـ PATH
 ./Configure \
     android-arm64 \
     no-shared \
     no-tests \
     no-ui-console \
-    no-stdio \
     --prefix="${OUTPUT_DIR}" \
     --openssldir="${OUTPUT_DIR}/ssl" \
     -D__ANDROID_API__=${API_LEVEL} \
-    -fPIC \
-    -fvisibility=hidden
+    -fPIC
 
 echo "══ بناء OpenSSL (قد يستغرق 3-5 دقائق) ══"
+# نستخدم build_libs لبناء المكتبات الثابتة فقط
 make -j"$(nproc)" build_libs
 
 echo "══ تثبيت الملفات ══"
-make install_dev   # يثبّت include/ و lib/ فقط (بدون برامج)
+make install_dev
 
-cd "${SCRIPT_DIR}"
+
+# ─── التحقق من Clang ──────────────────────────────────────────────────────────
+if [ ! -f "${CC}" ]; then
+    echo "✗ لم يُعثر على Clang: ${CC}"
+    echo "  تأكد من صحة NDK_PATH وAPI_LEVEL"
+    exit 1
+fi
+
 
 # ─── التحقق من النتائج ────────────────────────────────────────────────────────
 echo ""
